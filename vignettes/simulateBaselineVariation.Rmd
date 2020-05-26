@@ -256,7 +256,10 @@ print(g2)
 # and a linear model
 m2 <- glm(log(X_var) ~ log(S_var), data = iso_tbl)
 
-sjPlot::tab_model(m2)
+# the sjPlot::tab_model() function is not outputting to Rnotebook
+# m2 %>% sjPlot::tab_model()
+
+summary(m2)
 
 ```
 
