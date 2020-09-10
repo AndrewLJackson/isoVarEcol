@@ -1,5 +1,5 @@
 ---
-title: "Simluate over Baseline Variation"
+title: "Simluate over Number of Sources"
 output: html_notebook
 ---
 
@@ -32,7 +32,7 @@ library(patchwork)
 ```
 
 
-A simulation of populations of consumers over a range of isotopic baselines (sources) while keeping the number of sources and number of consumers constant.
+A simulation of populations of consumers over a range of food sources.
 
 There are basically two ways to do this:
 
@@ -54,55 +54,42 @@ n_pops <- 500
 n_individuals <- 50
 
 # number of food sources they eat from
-K <- 6
-
-# values of alpha from the dirichlet distribution to simulate from
-alpha_diet <- rep(3, K)
-
-# diet proportions. can be fixed for all individuals in the population or 
-# code could be modified to allow it to vary between populations when run.
-# this could be controlled by changing n = 1 to n = n_pops in the first and 
-# naive example (im sure some downstream code changes will be required).
-p <- MCMCpack::rdirichlet(n = n_individuals, alpha = alpha_diet)
-
-# repeat diet_p by rows so we can convert to a list which makes passing
-# them by row to pmap later on possible
-# p <-  data.frame(p) %>% slice(rep(1:n(), each = n_pops))
-
-# and split it
-# p <- split(as.matrix(p), 1:n_pops)
-
-p <- replicate(n_pops, p, simplify = FALSE)
+K <- ceiling(runif(n_pops, min = 2, max = 20 ))
 
 # set how many isotopes are used in each population and create the tibble
-iso_tbl <- tibble(n_individuals, K, p, n_iso = rep(2, n_pops) )
+iso_tbl <- tibble(n_individuals, K, n_iso = rep(2, n_pops) )
 
 ```
 
-### Pseudocode proposal for experiment definition
+## Generate the dietary proportions
 
-This needs to be implemented.
-
-* Define range of $K$, $\alpha$ and $\sigma^2_{S}$
-* Define constants of $n_{pop}$ and $n_{individuals}$
-* For each combination of $K$ and $\alpha$, generate the same matrix of $p_i$ for each $i$ individual and replicate for the defined number of populations $n_pop$. [*AJ - I am currently stuck at this step, at least in a tidyverse or base way that avoids nested for loops*]. [*__Update: cross_df() is the function I want:__* `cross_df(list(alpha, K))`]
-* Each population gets its own $\sigma^2_{S}$ as defined by drawing from a random uniform distribution along the range 1 to 30 as currently defined.
-
-```{r cross-example}
+```{r}
 
 # K is a vector 1:3
 # the alphas are stored in list aa, which can be of unequal length
 
-aa <- list(c(1,1,1), c(3,3,3), c(1,2,3), c(5,5,5,5,5))
+aa <- 3
+
+generateProportions <- function(n, K, aa){
+  
+  alpha_diet <- rep(aa, K)
+  
+  return(MCMCpack::rdirichlet(n = n, alpha = alpha_diet))
+  
+}
 
 # use cross_df to set up all combinations, but we have to generate an index
 # for the list aa and later insert the corresponding values from aa in 
 # the tibble and remove the idx column.
-aj <- cross_df(list(idx = 1:4, K = 1:3))
-bb <- aj %>% mutate(alphas = aa[idx]) %>% select(-idx) 
+# aj <- cross_df(list(idx = 1:4, K = 1:3))
+# bb <- aj %>% mutate(alphas = aa[idx]) %>% select(-idx) 
+
+iso_tbl %<>% mutate(p = pmap( list(n = n_individuals, K = K, aa = aa), generateProportions))
+
 
 
 ```
+
 
 
 ## Generate the Source isotope values
@@ -122,7 +109,7 @@ genSourceRange <- function(n_iso, max_val = 30){
 
 # generate maximum source isotope values from which to draw Sources in the  
 # subsequent step.
-iso_tbl %<>% mutate(S_max = pmap(list(n_iso), genSourceRange, max_val = 30))
+iso_tbl %<>% mutate(S_max = 10)
 
 
 # a function to generate the sources by drawing them from runif()
@@ -187,6 +174,36 @@ iso_tbl %<>% mutate(X = pmap(list(p, S), simPopEquilibrium))
 
 # Calculate Variances
 
+```{r dirichlet-moments}
+
+# given a vector of alphas calculate the first moments
+dirichletMomentsAlphas <- function(aa) {
+  
+  a_0 <- sum(aa)
+  
+  # the mean
+  mu_X <- aa / a_0
+  
+  # variance
+  var_X <- aa * (aa - a_0) / (a_0^2 * (a_0 + 1))
+  
+  # covariance
+  a_ij <- aa %*% t(aa)
+  diag(a_ij) <- 0 # set i=j to zero
+  
+  cov_X <- -a_ij / (a_0^2 * (a_0 + 1))
+  
+  return(list(mu_X, var_X, cov_X))
+  
+  
+}
+  
+
+dirichletMomentsAlphas(rep(3, 5))
+                        
+```
+
+
 There are numerous ways in which variance can be calculated on these multivariate data.
 
 ```{r}
@@ -226,37 +243,44 @@ iso_tbl %<>%
 
 ## Plot effect of increasing source variation on consumer isotopes
 
-### Standard Ellipse Area of consumer Vs Trace of Cov(Source Isotope values)
+### Standard Ellipse Area of consumer Vs SEA
 
 
 ```{r}
 
 g1 <- ggplot(data = iso_tbl, 
-             mapping = aes(x = S_var, y = SEA)) + 
+             mapping = aes(x = K, y = SEA)) + 
   geom_point()
 
 print(g1)
 
 ```
 
-### Sum of Covariance Matrices of Consumer Vs Sources
+### Trace of Consumer Vs Trace of Sources
 
 Plotted on log-log scale since our expectation from Jeff's model is that the relationship would be multiplicative. $\sigma^2_X \propto a\sigma^2_S$ where $a$ is a scaling constant that accounts for the other sources of variation. Furthermore, our expectation would be that of isometric scaling so that in $\sigma^2_X \propto a(\sigma^2_S)^b$ the scaling term $b = 1$. This can be formally tested by linear regression on the log-log scale $\log(\sigma^2_X) = a + b\ln(\sigma^2_S)$, where the slope of $\sigma^2_S$ is expected to be 1.
  
 ```{r}
+
+K_line <- tibble(K = 1:max(iso_tbl$K))
+K_line %<>% mutate(X_var = (K) / (K-1))
+
+
 g2 <- ggplot(data = iso_tbl, 
-             mapping = aes(x = S_var, y = X_var)) + 
+             mapping = aes(x = K, y = X_var)) + 
   geom_point() + 
-  geom_smooth(method = "lm") + 
+  geom_line(data = K_line, 
+            mapping = aes(x = K, 
+                          y = X_var)) + 
   scale_x_log10() + 
   scale_y_log10()
 
 print(g2)
 
-ggsave(g2, filename = "X_var-by-S_var.eps")
+ggsave(g2, filename = "X_var-by-K.eps")
 
 # and a linear model
-m2 <- glm(log(X_var) ~ log(S_var), data = iso_tbl)
+m2 <- glm(log(X_var) ~ log(I(K / (K - 1))), data = iso_tbl)
 
 # the sjPlot::tab_model() function is not outputting to Rnotebook
 # m2 %>% sjPlot::tab_model()
@@ -266,15 +290,16 @@ summary(m2)
 ```
 
 
-### Divide Consumer Variance by Source Variance
+### Correct for N Sources (K)
 
 It is clear from this example, generated with a common set of dietary proportions across all simulations, that dividing by the source isotope variance $\sigma^2_S$ removes the correlation.
 
 ```{r}
+
 g3 <- ggplot(data = iso_tbl, 
-             mapping = aes(x = S_var, y = X_var / S_var)) + 
+             mapping = aes(x = K, y = X_var *  (K-1) / (K))) + 
   geom_point() + 
-  geom_smooth(method = "lm") + 
+  # geom_smooth(method = "lm") + 
   ggtitle("Raw scale")
 
 # and the same plot on log scale
