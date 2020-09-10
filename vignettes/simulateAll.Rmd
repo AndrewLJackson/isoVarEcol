@@ -364,13 +364,16 @@ Print both side by side
 
 ggsave(plot = (g1|g1_corrected), filename = "effect-of-S_var.eps")
 
-(g2 | g2_corrected)
-
-ggsave(plot = (g2|g2_corrected), filename = "effect-of-K.eps")
-
 ```
 
 **Figure 1.** The relationship between the observed consumer isotope variation $\hat{\sigma}^2_x$ and the marginal effects of source isotope variation $\sigma^2_{x^*}$  in **a** and number of food sources $K$ in **b**. The blue line in **a** is a regression line fitted to the data, and the red line in **b** is the analytical predicted relationship of $\hat{\sigma}^2_x = (K-1)$.
+
+```{r}
+(g2 | g2_corrected)
+
+ggsave(plot = (g2|g2_corrected), filename = "effect-of-K.eps")
+```
+
 
 ### Correct for $\sigma_{x^*}$ and $K$.
 
@@ -383,9 +386,6 @@ It is important to note that our current use of $\text{tr}(\textbf{F})$ to repre
 
 ```{r}
 
-iso_tbl %<>% mutate(X_var_corrected = X_var / ( S_var * (K-1)))
-
-
 # uncorrected X_var
 g3 <- ggplot(data = iso_tbl, 
              mapping = aes(x = p_trace,
@@ -397,7 +397,7 @@ g3 <- ggplot(data = iso_tbl,
 # corrected X_var
 g4 <- ggplot(data = iso_tbl, 
              mapping = aes(x = p_trace,
-                           y = X_var_corrected)) + 
+                           y = X_var / ( S_var * (K-1)))) + 
   geom_point() + 
   geom_smooth(method = "lm")+
   geom_abline(intercept = 0, slope = 1, color = "red")
@@ -475,11 +475,13 @@ While S_var is coming out with a scaling of 1:1 with X_var, the relationship wit
 ```{r}
 
 g6 <- ggplot(data = iso_tbl, 
-             mapping = aes(x = S_var * (1-K) * cov_p_1,
+             mapping = aes(x = S_var * (K-1) * cov_p_1,
                            y = X_var)) + 
   geom_point() + 
   geom_smooth(method = "lm") + 
-  geom_abline(slope = 1, intercept = 0, color = "red")
+  geom_abline(slope = 1, intercept = 0, color = "red") + 
+  scale_x_log10() + 
+  scale_y_log10()
 
 print(g6)
 
