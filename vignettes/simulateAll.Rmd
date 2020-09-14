@@ -95,7 +95,7 @@ iso_tbl <- tibble(n_individuals, K, n_iso = rep(2, n_pops) )
 
 aa <- 3
 
-# a functino to generate alpha values for input to 
+# a function to generate alpha values for input to 
 # a corresponding Dirichlet. Values are drawn from a 
 # uniform distribution on a log10 scale between 
 # min and max as defined in the function call.
@@ -296,131 +296,24 @@ iso_tbl %<>%
 
 ## Plot marginal effects of each variable
 
-Since we simulated our data with across independent random draws of $K$, $\sigma_{x^*}$ and $\sigma_f$, we can explore the relationships between the observed consumer isotope variation $\hat{\sigma}_x$ and the observed statistical approximations of these simulated processes. We can also attempt to correct for "nuisance" effects of differing baselines or numbers of sources in order to focus on revealing the key effect of diet variation on consumer isotope variation.
+Since we simulated our data with across independent random draws of $K$, $\sigma_{x^*}$ and $\sigma_f$, we can explore the relationships between the observed consumer isotope variation $\hat{\sigma}_x$ and the observed statistical approximations of these simulated processes. Specifically we are looking for correlations according to the following statistical model based on the analytical model presented.
 
-### Effect of baseline variation $\sigma_{x^*}$.
+$$\sum\text{cov}(x_k,x_K) \propto \sigma^2_{x^*} (K-1)  \sum_{i,j}\text{cov}(f_i,f_j)$$
 
-```{r}
-g1 <- ggplot(data = iso_tbl, 
-             mapping = aes(x = S_var, y = X_var )) + 
-  geom_point() + 
-  geom_smooth(method = "lm") + 
-  scale_x_log10() + 
-  scale_y_log10()
+There are three things to note from this parameterisation:
 
-# and a linear model
-m1 <- glm(log(X_var) ~ log(S_var), data = iso_tbl)
+- whereas in the mathematical model, the dietary proportion $f_m$ defined as the source closest to the mean of the sources would be ommitted from the calculations, here assume we do not have access to this information and instead arbitrarily remove the first dietary proportion $f_1$ so that $i$ and $j$ range from 2 to $K$. 
+- I have not decomposed the covariance in diet into variance and correlation coefficient.
+- We also simulated over 2 isotopes in this case, and so the variation among consumers is calculated as the sum of the covariance over the $w \times K$ matrix of the consumer population's observed isotope values.
 
-# the sjPlot::tab_model() function is not outputting to Rnotebook
-# m2 %>% sjPlot::tab_model()
+Since the empirical focus would be on using consumer variation as the most likely available data, we explore the pairwise correlations between single parameters on the right hand side of the above equation, with $\sum\text{cov}(x_k,x_K)$ after correcting for the remaining two variables by dividing by $\sigma^2_{x^*} (K-1)$ in the example case of expecting a 1:1 relationship between:
 
-# summary(m2)
-
-# create a similar plot but remove marginal effects of other 
-# variables K and cov_p_1
-g1_corrected <- g1 + aes(y =  X_var / ((K-1) * cov_p_1 )) + 
-  geom_abline(slope = 1, intercept = 0, color = "red")
-# print(g1_corrected)
-
-```
+$$\frac{\sum\text{cov}(x_k,x_K)}{\sigma^2_{x^*} (K-1)} \propto \sum_{i,j}\text{cov}(f_i,f_j)$$
 
 
-### Effect of number of sources $K$.
+### Correlation between diet variation and consumer variation
 
-```{r}
-# Create a new tibble to allow us to 
-# add the line representing how X_var should scale with K
-K_line <- tibble(K = min(iso_tbl$K):max(iso_tbl$K))
-K_line %<>% mutate(X_var = K-1)
-
-
-# calculate the effect of K on X_var according to the model
-# for our simualted data
-iso_tbl %<>% mutate(K_effect = K - 1)
-
-# fit a linear model
-m2 <- glm(log(X_var) ~ log(K_effect), data = iso_tbl)
-
-g2 <- ggplot(data = iso_tbl, 
-             mapping = aes(x = K, y = X_var)) + 
-  geom_point() + 
-  geom_smooth(method = "lm") +
-  geom_line(data = K_line, 
-            mapping = aes(x = K, 
-                          y = X_var), 
-            color = "red") + 
-  scale_x_log10() + 
-  scale_y_log10()
-
-# similar plot correct for S_var and cov_p_1
-g2_corrected <- g2 + aes(y = X_var / (S_var * cov_p_1))
-
-```
-
-Print both side by side
-
-```{r}
-(g1 | g1_corrected)
-
-ggsave(plot = (g1|g1_corrected), filename = "effect-of-S_var.eps")
-
-```
-
-**Figure 1.** The relationship between the observed consumer isotope variation $\hat{\sigma}^2_x$ and the marginal effects of source isotope variation $\sigma^2_{x^*}$  in **a** and number of food sources $K$ in **b**. The blue line in **a** is a regression line fitted to the data, and the red line in **b** is the analytical predicted relationship of $\hat{\sigma}^2_x = (K-1)$.
-
-```{r}
-(g2 | g2_corrected)
-
-ggsave(plot = (g2|g2_corrected), filename = "effect-of-K.eps")
-```
-
-
-### Correct for $\sigma_{x^*}$ and $K$.
-
-Here we show the relationship between diet variation as quantified by the Trace of each population's matrix of dietary proportions with the uncorrected consumer isotope variance $\hat{\sigma}^2_x$ but also a corrected version ( $\hat{\sigma}^\dagger_x$) that accounts for the predicted relationship of $K$ and $\sigma^2_{x^*}$
-
-$$\hat{\sigma}^{2\dagger}_x = \frac{\hat{\sigma}^2_x}{\sigma^2_{x^*}(K-1)}$$
-
-It is important to note that our current use of $\text{tr}(\textbf{F})$ to represent variation in dietary proportions does not map perfectly onto the mathematical model which decomposes variation into $\sigma_f^2$ and $(1-\tau)$. As a result, $\text{tr}(\textbf{F})$ is likely to not fully capture the predicted relationship from the analytical model. *We need to think about this some more and probably chat with Jeff*.
-
-
-```{r}
-
-# uncorrected X_var
-g3 <- ggplot(data = iso_tbl, 
-             mapping = aes(x = p_trace,
-                           y = X_var)) + 
-  geom_point() + 
-  geom_smooth(method = "lm")
-
-
-# corrected X_var
-g4 <- ggplot(data = iso_tbl, 
-             mapping = aes(x = p_trace,
-                           y = X_var / ( S_var * (K-1)))) + 
-  geom_point() + 
-  geom_smooth(method = "lm")+
-  geom_abline(intercept = 0, slope = 1, color = "red")
-
-
-
-
-```
-
-```{r}
-
-# print both side by side
-(g3 | g4)
-
-ggsave(plot = (g3|g4), filename = "effect-of-diet-ptrace.eps")
-```
-
-
-
-**Figure 2.** The relationship between simulated consumer isotope variation (X_var = $\hat{\sigma}^2_x$) in **a**, and corrected isotope variation (X_var_corrected = $\hat{\sigma}^{2\dagger}_x$) in **b** against dietary variation (p_trace = $\text{tr}(\textbf{F})$ . The blue regression line in **a** is a linear fit, while the red line in **b** is the analytical prediction for a 1:1 scaling relationship.
-
-
-## Correlation between cov(p[-1]) and X_var
+Here `cov(p-1)` is the sum of the covariance matrix of the dietary proportions omitting the first source and `X_var` is the sum of the covariance of the consumer isotope matrix. This is the *main* result of interest.
 
 ```{r}
 # uncorrected X_var
@@ -452,12 +345,109 @@ g5_corrected <- ggplot(data = iso_tbl,
 ggsave(plot = (g5|g5_corrected), filename = "effect-of-diet-covar.eps")
 ```
 
+**Figure 1.** The relationship between simulated consumer isotope variation (X_var = $\hat{\sigma}^2_x$) in **a**, and corrected isotope variation (X_var_corrected = $\frac{\hat{\sigma}^2_x}{\sigma^2_{x^*}(K-1)}$) in **b** against dietary variation ($\sum_{i,j}\text{cov}(f_i,f_j)$). The blue regression line in **a** is a linear fit, while the red line in **b** is the analytical prediction for a 1:1 scaling relationship.
 
+
+### Coorelation between source variation and consumer variation
+
+Here we explore the effect of variation among source isotope values (i.e. isotopic baselines in ecology parlance) on conumser isotope variation. Given the relative scales of the various parameters, this has the largest effect. 
+
+```{r}
+g1 <- ggplot(data = iso_tbl, 
+             mapping = aes(x = S_var, y = X_var )) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  scale_x_log10() + 
+  scale_y_log10()
+
+# and a linear model
+m1 <- glm(log(X_var) ~ log(S_var), data = iso_tbl)
+
+# the sjPlot::tab_model() function is not outputting to Rnotebook
+# m2 %>% sjPlot::tab_model()
+
+# summary(m2)
+
+# create a similar plot but remove marginal effects of other 
+# variables K and cov_p_1
+g1_corrected <- g1 + aes(y =  X_var / ((K-1) * cov_p_1 )) + 
+  geom_abline(slope = 1, intercept = 0, color = "red")
+# print(g1_corrected)
+
+```
+
+Print both side by side
+
+```{r}
+(g1 | g1_corrected)
+
+ggsave(plot = (g1|g1_corrected), filename = "effect-of-S_var.eps")
+
+```
+
+**Figure 2.** The relationship between simulated consumer isotope variation (X_var = $\hat{\sigma}^2_x$) in **a**, and corrected isotope variation (X_var_corrected = $\frac{\hat{\sigma}^2_x}{\sigma^2_{x^*}(K-1)}$) in **b** against source isotope variation ($\sigma^2_{x^*}$). The blue regression line in **a** is a linear fit, while the red line in **b** is the analytical prediction for a 1:1 scaling relationship.
+
+
+### Correlation between number of sources and consumer variation
+
+Here we explore the expected 1:1 correlation between $(K-1)$ and $\sigma^2_x$.
+
+
+```{r}
+# Create a new tibble to allow us to 
+# add the line representing how X_var should scale with K
+# K_line <- tibble(K = min(iso_tbl$K):max(iso_tbl$K))
+# K_line %<>% mutate(X_var = K-1)
+
+
+# calculate the effect of K on X_var according to the model
+# for our simualted data
+# iso_tbl %<>% mutate(K_effect = K - 1)
+
+# fit a linear model
+m2 <- glm(log(X_var) ~ log(I(K-1)), data = iso_tbl)
+
+g2 <- ggplot(data = iso_tbl, 
+             mapping = aes(x = K-1, y = X_var)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") +
+  # geom_line(data = K_line, 
+  #           mapping = aes(x = K, 
+  #                         y = X_var), 
+  #           color = "red") +
+  geom_abline(slope = 1, intercept = 0, color = "red") + 
+  scale_x_log10() + 
+  scale_y_log10()
+
+# similar plot correct for S_var and cov_p_1
+g2_corrected <- g2 + aes(y = X_var / (S_var * cov_p_1))
+
+```
+
+
+
+**Figure 3.** The relationship between the observed consumer isotope variation $\hat{\sigma}^2_x$ and the marginal effect of source isotope variation $\sigma^2_{x^*}$  in **a** and the corrected   **b**. The blue line in **a** and **b** is a regression line fitted to the data, and the red line in **b** is the analytical predicted 1:1 relationship from the analytical model.
+
+```{r}
+(g2 | g2_corrected)
+
+ggsave(plot = (g2|g2_corrected), filename = "effect-of-K.eps")
+```
+
+**Figure 3.** The relationship between the observed consumer isotope variation $\hat{\sigma}^2_x$ and the marginal effects of number of food sources $K-1$ in **a** and the corrected consumer isotope variation in **b**. The blue line in **a** and **b** is a regression line fitted to the data, and the red line in **b** is the analytical predicted relationship of $\hat{\sigma}^2_x = (K-1)$.
 
 
 ### Fit a linear model for all the variables
 
-The prediction from a log-log regression model would be that the coefficients are all equal to 1. This is because on a log-log scale, the multiplicative relationships become additive.
+The prediction from a log-log regression model would be that the coefficients are all equal to 1. This is because on a log-log scale, the multiplicative relationships become additive. That is, if 
+
+$$y = abc$$
+
+then
+
+$$\log(y) = \log(a) + \log(b) + \log(c)$$
+
+**_I'm quite surprised with these results. Given that the glm() model is fitting type 3 sums of squares (fully partial residuals) I would have expected all of the slopes to very close to 1 given the figures above._**
 
 ```{r}
 
@@ -471,6 +461,8 @@ While S_var is coming out with a scaling of 1:1 with X_var, the relationship wit
 
 
 ### Plot including all variables
+
+**_Again i am suprised by this plot. I was expecting almost perfect correlation with a slope = 1 and an intercept close to 0._**
 
 ```{r}
 
