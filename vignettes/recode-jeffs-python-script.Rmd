@@ -1,0 +1,191 @@
+---
+title: "Recreate Jeff's Code"
+output: html_notebook
+author: Andrew L Jackson
+date: "`r Sys.Date()`"
+---
+
+
+```{r setup}
+
+library(tidyverse)
+library(patchwork)
+
+```
+
+
+```{r}
+
+# population variance
+fooVar <- function(x){
+  
+  sum((x - mean(x)) ^2) / length(x)
+  
+}
+
+dietCorr <- function(K, iso) {
+  
+  # alpha values of the dirichlet
+  alpha <- runif(K, min = iso, max = 1)
+  
+  # dietary proportions
+  dist <- MCMCpack::rdirichlet(n = 2000, alpha = alpha)
+  
+  # source isotope values
+  x_star <- runif(K, 0, 1)
+  
+  var_x_star <- fooVar(x_star)
+  
+  # generate the consumer isotopes
+  y <- dist %*% x_star
+  
+  # variance of the consumer isotopes
+  var_iso <- fooVar(y)
+  
+  # covariance matrix of the diet proportions
+  C <- var(dist)
+  
+  # non-zero eigen values of the covariance matrix
+  sigma <- eigen(C)$values[1:nrow(C-1)]
+  
+  # bundle variables for return
+  out <- list(C = C, sigma = sigma, x_star = x_star, var_iso = var_iso,
+              var_x_star = var_x_star)
+  
+  return(out)
+  
+}
+
+
+```
+
+
+Ensemble generation
+
+```{r}
+
+# replicate simulations
+reps <- 500
+
+# pre-allocate vectors for results
+numeric(reps) -> var_x -> var_x_theo -> var_x_min -> 
+  var_x_max -> aniso -> var_x_theo_no_prefactor
+
+ct <- 1
+
+while (ct < (reps+1)) {
+  
+  # number of food sources
+  K <- sample(3:15, size = 1)
+  
+  # isotropy
+  iso <- 1 #runif(1, min = 0, max = 1)
+  
+  simulation <- dietCorr(K, iso)
+  
+  # calculate statistics and store
+  var_x[ct] <- simulation$var_iso / simulation$var_x_star
+  
+  var_x_theo[ct] <- (K / (K-1.0)) * sum(simulation$sigma)
+  
+  var_x_theo_no_prefactor[ct] <- sum(simulation$sigma)
+  
+  aniso[ct] <- K * (max(simulation$sigma) - min(simulation$sigma))
+  
+  ct <- ct + 1
+  
+  
+}
+
+
+```
+
+```{r baseplots}
+
+plot(var_x_theo, var_x, type = "p", xlim = c(0, 0.3))
+abline(0,1, col = "red")
+
+```
+
+
+Plot results
+
+```{r}
+
+res_df <- data.frame(var_x, var_x_theo, var_x_theo_no_prefactor, aniso)
+
+g1 <- ggplot(res_df, 
+             mapping = aes(x = var_x_theo, 
+                           y = var_x)) + 
+  geom_point(alpha = 0.5) + 
+  geom_abline(intercept = 0, slope =1, color = "red") + 
+  geom_smooth(method = "lm")
+
+g2 <- ggplot(res_df, 
+             mapping = aes(x = var_x_theo_no_prefactor, 
+                           y = var_x)) + 
+  geom_point(alpha = 0.5) + 
+  geom_abline(intercept = 0, slope =1, color = "red") + 
+  geom_smooth(method = "lm")
+
+(g1 | g2)
+
+```
+
+## Test Python and R calculation of Covariance Matrices
+
+```{r}
+library(reticulate)
+use_python("/usr/bin/python")
+
+# import numpy and specify no automatic Python to R conversion
+np <- import("numpy", convert = FALSE)
+
+
+```
+
+```{r test-covariance-matrix}
+
+# generate a covariance matrix
+X <- rWishart(n = 1, 2, matrix(c(1,0,0,1),2,2))[,,1]
+
+
+# do some array manipulations with NumPy
+py_C <- np$cov(X)
+
+# convert to R explicitly at the end
+py_C <- py_to_r(py_C)
+
+# use R to calculate covariance
+r_C <- cov(X)
+
+# test if they are equal
+all((r_C - py_C) <= 10^-16)
+
+
+
+
+
+```
+
+
+```{r test-var}
+
+# random vector
+Y <- rnorm(10)
+
+# python variance
+py_var <- np$var(Y)
+py_var <- py_to_r(py_var)
+
+# use np.cov() to calculate variance
+py_var_using_cov <- np$cov(Y) %>% py_to_r
+
+# r variance
+r_var <- var(Y)
+
+all((r_var - py_var) <= 10^-6)
+
+
+```
+
