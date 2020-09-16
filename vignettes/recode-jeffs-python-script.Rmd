@@ -23,27 +23,36 @@ fooVar <- function(x){
   
 }
 
-dietCorr <- function(K, iso) {
+
+popVar <- function(x){
+  
+  # sum((x - mean(x)) ^2) / length(x)
+  
+  cov(as.matrix(x)) *  (length(x) - 1) / length(x)
+  
+}
+
+dietCorr <- function(K = 3, iso = 1, npop = 100, niso = 2) {
   
   # alpha values of the dirichlet
   alpha <- runif(K, min = iso, max = 1)
   
   # dietary proportions
-  dist <- MCMCpack::rdirichlet(n = 2000, alpha = alpha)
+  dist <- MCMCpack::rdirichlet(n = npop, alpha = alpha)
   
   # source isotope values
-  x_star <- runif(K, 0, 1)
+  x_star <- matrix(runif(K*niso, 0, 1), K , niso )
   
-  var_x_star <- fooVar(x_star)
+  var_x_star <- sum(apply(x_star, 2, fooVar))
   
   # generate the consumer isotopes
   y <- dist %*% x_star
   
   # variance of the consumer isotopes
-  var_iso <- fooVar(y)
+  var_iso <- sum(apply(y, 2, fooVar)) #sum(diag(popVar(y)))
   
   # covariance matrix of the diet proportions
-  C <- var(dist)
+  C <- cov(dist)
   
   # non-zero eigen values of the covariance matrix
   sigma <- eigen(C)$values[1:nrow(C-1)]
@@ -81,7 +90,12 @@ while (ct < (reps+1)) {
   # isotropy
   iso <- 1 #runif(1, min = 0, max = 1)
   
-  simulation <- dietCorr(K, iso)
+  # number f isotopes
+  niso = 2
+  
+  npop = 100
+  
+  simulation <- dietCorr(K = K, iso = iso, niso = niso, npop = npop)
   
   # calculate statistics and store
   var_x[ct] <- simulation$var_iso / simulation$var_x_star

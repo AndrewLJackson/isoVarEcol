@@ -69,7 +69,22 @@ The above procedure is then repeated for each of the 1000 replicate populations.
 # Define Population Variance
 
 ```{r}
-# population variance
+# population variance calculated using cov() and then correcting by 
+# multiplying by (n-1) / n
+popVar <- function(x){
+  
+  # sum((x - mean(x)) ^2) / length(x)
+  
+  x <- as.matrix(x)
+  
+  n <- nrow(x)
+  
+  cov(as.matrix(x)) *  (n - 1) / n
+  
+}
+
+
+# a basic population variance
 fooVar <- function(x){
   
   sum((x - mean(x)) ^2) / length(x)
@@ -85,13 +100,13 @@ Define the properties of the consumers
 ```{r}
 
 # how many populations to simulate
-n_pops <- 1000
+n_pops <- 500
 
 # how many consumers per population
 n_individuals <- 100
 
 # number of isotopes
-n_iso <- 1
+n_iso <- 10
 
 # number of food sources they eat from
 K <- ceiling(runif(n_pops, min = 3, max = 20 ))
@@ -116,7 +131,8 @@ iso_tbl <- tibble(n_individuals, K, n_iso = rep(n_iso, n_pops) )
 # min and max as defined in the function call.
 generateAlpha <- function(K = 3, min = 0.1, max = 1) {
   
-  return(10 ^ runif(K, min = log10(min), max = log10(max)))
+  # return(10 ^ runif(K, min = log10(min), max = log10(max)))
+  return(runif(K, min = min, max = max))
   
 }
 
@@ -130,8 +146,10 @@ generateProportions <- function(n, K, aa){
 }
 
 
-# iso_tbl %<>% mutate(aa = pmap(list(K), generateAlpha, min = 0.1, max = 10 ))
-iso_tbl %<>% mutate(aa = pmap(list(K), generateAlpha, min = 1, max = 1 ))
+iso_tbl %<>% mutate(aa = pmap(list(K), generateAlpha, min = 0.1, max = 5 ))
+
+# for testing, can set all alphas == 1
+# iso_tbl %<>% mutate(aa = pmap(list(K), generateAlpha, min = 1, max = 1 ))
 
 # use cross_df to set up all combinations, but we have to generate an index
 # for the list aa and later insert the corresponding values from aa in 
@@ -315,18 +333,18 @@ consumerVarEstimate <- function(S, p_cov){
 # Calculate various measures of consumer variation
 iso_tbl %<>% 
   mutate(SEA     = pmap(list(X), ~doSEA(.)) %>% unlist,
-         X_var   = pmap(list(X), ~sum(cov(.))) %>% unlist,
-         X_trace = pmap(list(X), ~sum(diag(cov(.)))) %>% unlist
+         X_var   = pmap(list(X), ~sum(apply(., 2, fooVar))) %>% unlist,
+         X_trace = pmap(list(X), ~sum(diag(popVar(.)))) %>% unlist
          )
 
 # test jeff's model specification
-iso_tbl %<>% mutate(X_jeff  = pmap(list(S, p_cov), consumerVarEstimate) %>% unlist)
+# iso_tbl %<>% mutate(X_jeff  = pmap(list(S, p_cov), consumerVarEstimate) %>% unlist)
 
 
 # Calculate various measures of source variation
 iso_tbl %<>% 
-  mutate(S_var   = pmap(list(S), ~sum(cov(.))) %>% unlist,
-         S_trace = pmap(list(S), ~sum(diag(cov(.)))) %>% unlist)
+  mutate(S_var   = pmap(list(S), ~sum(apply(., 2, popVar))) %>% unlist,
+         S_trace = pmap(list(S), ~sum(diag(popVar(.))))     %>% unlist)
 
 
 
@@ -335,36 +353,13 @@ iso_tbl %<>%
 
 ## Plot the simluations
 
-```{r testing}
-
-g_test_1 <- ggplot(data = iso_tbl, mapping = aes(x = X_jeff, X_var)) + 
-  geom_point()
-
-
-g_test_2 <- ggplot(data = iso_tbl, mapping = aes(x = S_var, S_trace)) + 
-  geom_point()
-
-(g_test_1 | g_test_2)
-
-g_test_3 <- ggplot(data = iso_tbl, 
-             mapping = aes(x = X_theo,
-                           y = ((K) / (K-1)) * p_trace)) +
-  geom_point()
-
-g_test_3
-
-
-
-```
-
-
 
 
 ```{r}
 # uncorrected X_var
 g1 <- ggplot(data = iso_tbl, 
              mapping = aes(x = p_trace,
-                           y = X_jeff)) + 
+                           y = X_var)) + 
   geom_point(alpha = 0.5) + 
   geom_smooth(method = "lm")
 
@@ -373,7 +368,7 @@ g1 <- ggplot(data = iso_tbl,
 # corrected X_var
 g1_corrected <- ggplot(data = iso_tbl, 
              mapping = aes(x = ((K) / (K-1)) * p_trace,
-                           y = X_var / S_trace ,
+                           y = X_var / S_var ,
                            color = K * p_aniso)) + 
   geom_point() + 
   geom_smooth(method = "lm") +
@@ -383,9 +378,9 @@ g1_corrected <- ggplot(data = iso_tbl,
 g1_test <- g1_corrected + aes(x = p_trace)
 
 
-(g1 | g1_corrected | g1_test)
+(g1 | g1_corrected)
 
-ggsave(plot = (g1|g1_corrected | g1_test), filename = "consumer-correlates-with-diet.pdf", width = 10)
+ggsave(plot = (g1|g1_corrected), filename = "consumer-correlates-with-diet.pdf", width = 10, height = 7)
 ```
 
 
@@ -396,11 +391,13 @@ g2 <- ggplot(iso_tbl, aes(x = K * p_aniso,
   geom_point(alpha = 0.5)
 
 # absolute deviations
-g2_abs <- g2 + aes(y = abs((X_var / S_var) - (K / (K-1)) * p_trace ))
+g2_abs <- g2 + aes(y = abs((X_var / S_var) - (K / (K-1)) * p_trace )) + 
+  geom_smooth(method = "lm") + 
+  ylab("Absolute Deviance")
 
-(g2 | g2_abs)
+(g2_abs)
 
-ggsave((g2 | g2_abs), filename = "anisotropy.pdf", width = 10)
+ggsave(g2_abs, filename = "anisotropy.pdf", width = 10, height = 4.51)
 
 ```
 
@@ -425,6 +422,29 @@ m5 %>% tidy() %>% kable(digits = 2)
 ```
 
 
-While S_var is coming out with a scaling of 1:1 with X_var, the relationship with number of sources (K-1) is not matching well the predicted relationship, and is in fact negative. It is possible that this is arising due to us not correcting for diet variation in this model, and my understanding is that a Dirichlet distribution is going to change the estimated diet variation in a confounded way with the number of food sources, and my sense is that i would expect diet variation and hence consumer isotope variation to decrease with number of sources. *We should chat with Jeff about this as my feeling is that it is a consequence of the way we are simulating the data from the dirichlet distribution.*
+## Testing
+
+```{r}
+ggplot(iso_tbl, aes(x = X_var, y = X_trace)) + 
+  geom_point() + 
+  geom_abline(intercept = 0, slope = 1, color = "red") + 
+  geom_smooth(method = "lm")
+
+
+ggplot(iso_tbl, aes(x = S_var, y = S_trace)) + 
+  geom_point() + 
+  geom_abline(intercept = 0, slope = 1, color = "red") + 
+  geom_smooth(method = "lm")
+
+```
+
+
+
+
+
+
+
+
+
 
 
