@@ -100,13 +100,16 @@ Define the properties of the consumers
 ```{r}
 
 # how many populations to simulate
-n_pops <- 500
+n_pops <- 1000
 
 # how many consumers per population
 n_individuals <- 100
 
 # number of isotopes
-n_iso <- 10
+n_iso <- 3
+
+# Source isotopes range from 0 to source_iso_max and are uniform random.
+source_iso_max <- 10
 
 # number of food sources they eat from
 K <- ceiling(runif(n_pops, min = 3, max = 20 ))
@@ -177,12 +180,14 @@ iso_tbl %<>% mutate(p = pmap( list(n = n_individuals, K = K, aa = aa), generateP
 
 # a wrapper function to pull runifs for the range of source isotoeps
 genSourceRange <- function(n_iso, max_val = 30){
-  runif(n_iso, min = 1, max = max_val)
+  runif(n_iso, min = 0, max = max_val)
   }
 
 # generate maximum source isotope values from which to draw Sources in the  
 # subsequent step.
-iso_tbl %<>% mutate(S_max = pmap(list(n_iso), genSourceRange, max_val = 1))
+iso_tbl %<>% mutate(S_max = pmap(list(n_iso), 
+                                 genSourceRange, 
+                                 max_val = source_iso_max))
 
 
 # a function to generate the sources by drawing them from runif()
@@ -356,31 +361,46 @@ iso_tbl %<>%
 
 
 ```{r}
+
+# generate the string for the figure title
+my_title <- ifelse(n_iso == 1, 
+                   paste0(n_iso, " isotope"),
+                   paste0(n_iso, " isotopes"))
+
 # uncorrected X_var
 g1 <- ggplot(data = iso_tbl, 
              mapping = aes(x = p_trace,
                            y = X_var)) + 
   geom_point(alpha = 0.5) + 
-  geom_smooth(method = "lm")
+  geom_smooth(method = "lm") + 
+  ggtitle(my_title)
 
 # (K / (K-1))
 
 # corrected X_var
 g1_corrected <- ggplot(data = iso_tbl, 
              mapping = aes(x = ((K) / (K-1)) * p_trace,
-                           y = X_var / S_var ,
-                           color = K * p_aniso)) + 
+                           y = X_var / S_var)) + 
   geom_point() + 
   geom_smooth(method = "lm") +
   geom_abline(intercept = 0, slope = 1, color = "red") + 
-  scale_color_viridis_c()
+  scale_color_viridis_c() + 
+  ggtitle(my_title) + 
+  coord_equal() + 
+  xlim(0, 0.2) + 
+  ylim(0, 0.2)
 
 g1_test <- g1_corrected + aes(x = p_trace)
 
 
 (g1 | g1_corrected)
 
-ggsave(plot = (g1|g1_corrected), filename = "consumer-correlates-with-diet.pdf", width = 10, height = 7)
+ggsave(plot = (g1),
+       paste0("n_iso_", n_iso, "_naive_correlation.pdf"), 
+       width = 7, height = 7)
+ggsave(plot = (g1_corrected), 
+       filename = paste0("n_iso_", n_iso, "_corrected_correlation.pdf"), 
+       width = 7, height = 7)
 ```
 
 
@@ -397,7 +417,9 @@ g2_abs <- g2 + aes(y = abs((X_var / S_var) - (K / (K-1)) * p_trace )) +
 
 (g2_abs)
 
-ggsave(g2_abs, filename = "anisotropy.pdf", width = 10, height = 4.51)
+ggsave(g2_abs, 
+       filename = paste0("n_iso_", n_iso, "_anisotropy.pdf"), 
+       width = 10, height = 4.51)
 
 ```
 
