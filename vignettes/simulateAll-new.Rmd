@@ -108,7 +108,7 @@ n_pops <- 1000
 n_individuals <- 100
 
 # number of isotopes
-n_iso <- 3
+n_iso <- 1
 
 # Source isotopes range from 0 to source_iso_max and are uniform random.
 source_iso_max <- 10
