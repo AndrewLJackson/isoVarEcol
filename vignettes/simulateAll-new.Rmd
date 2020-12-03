@@ -368,17 +368,18 @@ iso_tbl %<>%
 # generate the string for the figure title
 my_title <- ifelse(n_iso == 1, 
                    paste0(n_iso, " isotope"),
-                   paste0(n_iso, " isotopes"))
+                   paste0(n_iso, " isotope"))
 
 # uncorrected X_var
 g1 <- ggplot(data = iso_tbl, 
              mapping = aes(x = p_trace,
                            y = X_var)) + 
-  geom_point(alpha = 0.5) + 
-  geom_smooth(method = "lm") + 
+  geom_point(alpha = 1, size = 0.5) + 
+  geom_smooth(method = "lm", color = "black") + 
   ggtitle(my_title) + 
   xlab(expression(Tr(italic(C[f])))) + 
-  ylab(expression(var(italic(y))))
+  ylab(expression(var(italic(y)))) +
+  theme_classic()
 
 # (K / (K-1))
 
@@ -386,16 +387,17 @@ g1 <- ggplot(data = iso_tbl,
 g1_corrected <- ggplot(data = iso_tbl, 
              mapping = aes(x = ((K) / (K-1)) * p_trace,
                            y = X_var / S_var)) + 
-  geom_point() + 
-  geom_smooth(method = "lm") +
-  geom_abline(intercept = 0, slope = 1, color = "red") + 
+  geom_point(alpha = 1, size = 0.5) + 
+  geom_smooth(method = "lm", color = "black") +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "black") + 
   scale_color_viridis_c() + 
   ggtitle(my_title) + 
   coord_equal() + 
   xlim(0, 0.2) + 
   ylim(0, 0.2) + 
   xlab(expression(italic(frac(n, n-1))* Tr(italic(C[f])))) + 
-  ylab(expression(var(italic(y)) / var(italic(x))))
+  ylab(expression(var(italic(y)) / var(italic(x)))) + 
+  theme_classic()
   
   
 g1_test <- g1_corrected + aes(x = p_trace)
@@ -416,11 +418,12 @@ ggsave(plot = (g1_corrected),
 
 g2 <- ggplot(iso_tbl, aes(x = K * p_aniso,
                           y = (X_var / S_var) - (K / (K-1)) * p_trace )) + 
-  geom_point(alpha = 0.5)
+  geom_point(alpha = 1, size = 0.5) +
+  theme_classic()
 
 # absolute deviations
 g2_abs <- g2 + aes(y = abs((X_var / S_var) - (K / (K-1)) * p_trace )) + 
-  geom_smooth(method = "lm") + 
+  geom_smooth(method = "lm", color = "black") + 
   ylab("Absolute Deviance") + 
   xlab(expression(n (aniso_equation)))
 
