@@ -425,7 +425,7 @@ g2 <- ggplot(iso_tbl, aes(x = K * p_aniso,
 g2_abs <- g2 + aes(y = abs((X_var / S_var) - (K / (K-1)) * p_trace )) + 
   geom_smooth(method = "lm", color = "black") + 
   ylab("Absolute Deviance") + 
-  xlab(expression(italic(n)(max((lambda))-min ((lambda)))))
+  xlab(expression(italic(n)(max[alpha](sigma^2)[alpha]-min[alpha](sigma^2)[alpha])))
 
 (g2_abs)
 
