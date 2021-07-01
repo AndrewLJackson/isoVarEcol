@@ -26,18 +26,21 @@
 #'
 #' @examples
 
+## NB this function is currently defined inline in the main script
+## simulateRandomPopulations.Rmd. This file is retained for the roxygen
+## header if in the future we decide to release this code as an R package.
 
-simPopEquilibrium <- function(p = MCMCpack::rdirichlet(1, rep(1, 3)),
-                              S = matrix(runif(6, min = -10, max = 0),
-                                         nrow = 3, ncol = 2), TDF = 0,
-                              setSeed = NULL, ...) {
-
-  if(!is.null(setSeed)) {set.seed(setSeed)}
-
-  # Calculate the Stable isotope values of the consumers as a
-  # p weighted sum of food source isotoep values (S) after applying the
-  # Trophic Discrimination factor (TDF)
-  consumerIso <- p %*% (S + TDF)
-
-  return(consumerIso)
-}
+# simPopEquilibrium <- function(p = MCMCpack::rdirichlet(1, rep(1, 3)),
+#                               S = matrix(runif(6, min = -10, max = 0),
+#                                          nrow = 3, ncol = 2), TDF = 0,
+#                               setSeed = NULL, ...) {
+#
+#   if(!is.null(setSeed)) {set.seed(setSeed)}
+#
+#   # Calculate the Stable isotope values of the consumers as a
+#   # p weighted sum of food source isotoep values (S) after applying the
+#   # Trophic Discrimination factor (TDF)
+#   consumerIso <- p %*% (S + TDF)
+#
+#   return(consumerIso)
+# }

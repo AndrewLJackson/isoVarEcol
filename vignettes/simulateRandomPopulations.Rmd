@@ -86,8 +86,9 @@ popVar <- function(x){
 }
 
 
-# a basic population variance
-fooVar <- function(x){
+# A basic population variance function
+# NB this contrasts with R's default cov() which uses sample variance.
+popVar <- function(x){
   
   sum((x - mean(x)) ^2) / length(x)
   
@@ -101,22 +102,28 @@ Define the properties of the consumers
 
 ```{r}
 
-# how many populations to simulate
-n_pops <- 1000
-
-# how many consumers per population
-n_individuals <- 100
-
-# number of isotopes
+# number of isotopes - USER DEFINE and is a key variable we alter for the 
+# figures presented in the paper. Specically we present results from 
+# n_iso = c(1, 2, 10)
 n_iso <- 1
 
-# Source isotopes range from 0 to source_iso_max and are uniform random.
+# how many populations to simulate - USER DEFINE
+n_pops <- 1000
+
+# how many consumers per population - USER DEFINE
+n_individuals <- 100
+
+# Source isotope values range from 0 to source_iso_max 
+# and are uniform random. - USER DEFINE
 source_iso_max <- 10
 
-# number of food sources they eat from
+# number of food sources they eat from - USER can define the min and max 
+# number of food sources
 K <- ceiling(runif(n_pops, min = 3, max = 20 ))
 
 # set how many isotopes are used in each population and create the tibble
+# that stores the corresponding values of each simulation
+# Determined by values defined above.
 iso_tbl <- tibble(n_individuals, K, n_iso = rep(n_iso, n_pops) )
 
 ```
@@ -124,11 +131,6 @@ iso_tbl <- tibble(n_individuals, K, n_iso = rep(n_iso, n_pops) )
 ## Generate the dietary proportions
 
 ```{r}
-
-# K is a vector 1:3
-# the alphas are stored in list aa, which can be of unequal length
-
-# aa <- 3
 
 # a function to generate alpha values for input to 
 # a corresponding Dirichlet. Values are drawn from a 
@@ -150,7 +152,8 @@ generateProportions <- function(n, K, aa){
   
 }
 
-
+# Map over the individual simulation values in the tibble and store the 
+# corresponding alpha values for the dirichlet distribution.
 iso_tbl %<>% mutate(aa = pmap(list(K), generateAlpha, min = 0.1, max = 5 ))
 
 # for testing, can set all alphas == 1
@@ -162,8 +165,10 @@ iso_tbl %<>% mutate(aa = pmap(list(K), generateAlpha, min = 0.1, max = 5 ))
 # aj <- cross_df(list(idx = 1:4, K = 1:3))
 # bb <- aj %>% mutate(alphas = aa[idx]) %>% select(-idx) 
 
-iso_tbl %<>% mutate(p = pmap( list(n = n_individuals, K = K, aa = aa), generateProportions))
-
+# Map over the individual simulation values in the tibble and store the 
+# corresponding dietary proportions for each simulated population.
+iso_tbl %<>% mutate(p = pmap( list(n = n_individuals, K = K, aa = aa), 
+                              generateProportions))
 
 
 ```
@@ -175,22 +180,24 @@ iso_tbl %<>% mutate(p = pmap( list(n = n_individuals, K = K, aa = aa), generateP
 
 ```{r}
 
-# the max range of the isotopes. Here i am rescaling real isotope values so that
-# their S_min is zero. I am imaging these to be d13C and d15N in this example.
-# I generate  range of them from 0 to 20 for d13C and 0 to 10 for d15N.
-
-
 # a wrapper function to pull runifs for the range of source isotoeps
 genSourceRange <- function(n_iso, max_val = 30){
   runif(n_iso, min = 0, max = max_val)
   }
 
+## start -- code not run -- retained should S_max be varied across simulations. 
 # generate maximum source isotope va?lues from which to draw Sources in the  
 # subsequent step.
 # iso_tbl %<>% mutate(S_max = pmap(list(n_iso), 
 #                                  genSourceRange, 
 #                                  max_val = source_iso_max))
 # in this formulation S_max is a constant and defined above.
+## end -- code not run --
+
+# S_max is same as the user defined constant source_iso_max and in these 
+# simulations is a constant. The code immediately above allows this to vary 
+# randomly across simluations but there is no real value in pushing this 
+# extra source of variation through the code.
 iso_tbl %<>% mutate(S_max = source_iso_max)
 
 # a function to generate the sources by drawing them from runif()
@@ -203,7 +210,9 @@ generateSources <- function(K = 3, S_max = c(1, 10), setSeed = NULL, ...){
   # Each column i has runif max = S_max[i]
   matrix(runif(n = K * length(S_max), min = 0, max = S_max),
          ncol = length(S_max), byrow = TRUE)
-  # print(c(K,S_max))
+  
+  ## for debugging
+  # print(c(K,S_max)) 
   
 }
 
@@ -213,7 +222,7 @@ generateSources <- function(K = 3, S_max = c(1, 10), setSeed = NULL, ...){
 # use pmap to loop over the rows of our tibble, select the K and S_max
 # columns and use those to draw a set of runif distributed isotope values for
 # each of the K sources and number of isotopes (length of S_max)
-iso_tbl %<>% mutate(S = pmap( list(K, S_max), generateSources, setSeed = NULL))
+iso_tbl %<>% mutate(X = pmap( list(K, S_max), generateSources, setSeed = NULL))
 
 
 
@@ -244,10 +253,11 @@ simPopEquilibrium <- function(p = MCMCpack::rdirichlet(1, rep(1, 3)),
 
 ```{r}
 
-# call the function simPopEquilibrium which we sourced from "R/" directory
-# in the setup chunk. This function calculates the consumer isotope values.
-# This function is mapped over each row in our dataset.
-iso_tbl %<>% mutate(X = pmap(list(p, S), simPopEquilibrium))
+# call the function simPopEquilibrium. 
+# This function calculates the consumer isotope values.
+# This function is mapped over each row in our dataset and 
+# takes the dietary proportions p and source isotope values S.
+iso_tbl %<>% mutate(Y = pmap(list(p, X), simPopEquilibrium))
 
 
 ```
@@ -262,6 +272,7 @@ This function below allows us to calculate the mean, variance and covariance of 
 # given a vector of alphas calculate the first moments
 dirichletMomentsAlphas <- function(aa) {
   
+  # sum of alphas used as shorthand subsequently
   a_0 <- sum(aa)
   
   # the mean
@@ -282,7 +293,7 @@ dirichletMomentsAlphas <- function(aa) {
 }
   
 
-# test the function
+# Debuggin - test the function
 # dirichletMomentsAlphas(rep(3, 5))
                         
 ```
@@ -298,9 +309,8 @@ The total variance of the isotope food sources for each population is calculated
 
 ```{r}
 
-# The Trace (sum of the diagonal) of the covariance matrix of the 
-# dietary proportions. Which will approximate the sample estimate
-
+# Use pmap to calculate various summary statistics for each population (row) 
+# based on the dietary proportions. 
 
 iso_tbl %<>%
   mutate(p_cov = pmap(list(p), ~cov(.)),
@@ -311,12 +321,15 @@ iso_tbl %<>%
            unlist,
          )
 
-# testing with jeff's code
-iso_tbl %<>% mutate(p_mean_sigma = map(p_eig_values, ~mean(.[-length(.)])) %>% unlist)
-iso_tbl %<>% mutate(X_theo = K * p_mean_sigma)
+# # testing with jeff's code
+# iso_tbl %<>% 
+#   mutate(p_mean_sigma = map(p_eig_values, ~mean(.[-length(.)])) %>% unlist)
+# iso_tbl %<>% 
+#   mutate(X_theo = K * p_mean_sigma)
 
 
-# calculate the area of the Standard Ellipse Area of the isotope data
+# A function to call and extract the area of the 
+# Standard Ellipse Area of the isotope data
 # NB only works in two dimensions for SIBER but it can easily be 
 # extended to Z dimensions. We use an internal if() statement to check 
 # before calculating the area, else it returns NA.
@@ -336,23 +349,24 @@ consumerVarEstimate <- function(S, p_cov){
   
   out <- t(S) %*% (p_cov %*% S)
   return(out)
-  }
+}
 
-# Calculate various measures of consumer variation
+# Calculate various summary statistics of consumer isotope variation
 iso_tbl %<>% 
-  mutate(SEA     = pmap(list(X), ~doSEA(.)) %>% unlist,
-         X_var   = pmap(list(X), ~sum(apply(., 2, fooVar))) %>% unlist,
-         X_trace = pmap(list(X), ~sum(diag(popVar(.)))) %>% unlist
+  mutate(SEA     = pmap(list(Y), ~doSEA(.)) %>% unlist,
+         Y_var   = pmap(list(Y), ~sum(apply(., 2, popVar))) %>% unlist,
+         Y_trace = pmap(list(Y), ~sum(diag(popVar(.)))) %>% unlist
          )
 
 # test jeff's model specification
 # iso_tbl %<>% mutate(X_jeff  = pmap(list(S, p_cov), consumerVarEstimate) %>% unlist)
 
 
-# Calculate various measures of source variation
+# Calculate various statistics on the Source variation including the 
+# sum of the covariance matrix and its trace.
 iso_tbl %<>% 
-  mutate(S_var   = pmap(list(S), ~sum(apply(., 2, popVar))) %>% unlist,
-         S_trace = pmap(list(S), ~sum(diag(popVar(.))))     %>% unlist)
+  mutate(X_var   = pmap(list(X), ~sum(apply(., 2, popVar))) %>% unlist,
+         X_trace = pmap(list(X), ~sum(diag(popVar(.))))     %>% unlist)
 
 
 
@@ -373,7 +387,7 @@ my_title <- ifelse(n_iso == 1,
 # uncorrected X_var
 g1 <- ggplot(data = iso_tbl, 
              mapping = aes(x = p_trace,
-                           y = X_var)) + 
+                           y = Y_var)) + 
   geom_point(alpha = 0.5) + 
   geom_smooth(method = "lm") + 
   ggtitle(my_title) + 
@@ -385,7 +399,7 @@ g1 <- ggplot(data = iso_tbl,
 # corrected X_var
 g1_corrected <- ggplot(data = iso_tbl, 
              mapping = aes(x = ((K) / (K-1)) * p_trace,
-                           y = X_var / S_var)) + 
+                           y = Y_var / X_var)) + 
   geom_point() + 
   geom_smooth(method = "lm") +
   geom_abline(intercept = 0, slope = 1, color = "red") + 
@@ -404,10 +418,10 @@ g1_test <- g1_corrected + aes(x = p_trace)
 (g1 | g1_corrected)
 
 ggsave(plot = (g1),
-       paste0("n_iso_", n_iso, "_naive_correlation.pdf"), 
+       paste0("../export/", "n_iso_", n_iso, "_naive_correlation.pdf"), 
        width = 7, height = 7)
 ggsave(plot = (g1_corrected), 
-       filename = paste0("n_iso_", n_iso, "_corrected_correlation.pdf"), 
+       filename = paste0("../export/", "n_iso_", n_iso, "_corrected_correlation.pdf"), 
        width = 7, height = 7)
 ```
 
@@ -415,11 +429,11 @@ ggsave(plot = (g1_corrected),
 ```{r}
 
 g2 <- ggplot(iso_tbl, aes(x = K * p_aniso,
-                          y = (X_var / S_var) - (K / (K-1)) * p_trace )) + 
+                          y = (Y_var / X_var) - (K / (K-1)) * p_trace )) + 
   geom_point(alpha = 0.5)
 
 # absolute deviations
-g2_abs <- g2 + aes(y = abs((X_var / S_var) - (K / (K-1)) * p_trace )) + 
+g2_abs <- g2 + aes(y = abs((Y_var / X_var) - (K / (K-1)) * p_trace )) + 
   geom_smooth(method = "lm") + 
   ylab("Absolute Deviance") + 
   xlab(expression(n (aniso_equation)))
@@ -427,7 +441,7 @@ g2_abs <- g2 + aes(y = abs((X_var / S_var) - (K / (K-1)) * p_trace )) +
 (g2_abs)
 
 ggsave(g2_abs, 
-       filename = paste0("n_iso_", n_iso, "_anisotropy.pdf"), 
+       filename = paste0("../export/", "n_iso_", n_iso, "_anisotropy.pdf"), 
        width = 10, height = 4.51)
 
 ```
@@ -447,7 +461,7 @@ $$\log(y) = \log(a) + \log(b) + \log(c)$$
 
 ```{r}
 
-m5 <- glm(log(X_var) ~ log(I(K/(K-1))) + log(S_var) + log(p_trace), data = iso_tbl)
+m5 <- glm(log(Y_var) ~ log(I(K/(K-1))) + log(X_var) + log(p_trace), data = iso_tbl)
 
 m5 %>% tidy() %>% kable(digits = 2)
 ```
@@ -455,14 +469,16 @@ m5 %>% tidy() %>% kable(digits = 2)
 
 ## Testing
 
+How do the sum of the covariance matrices (for $Y$ and $X$) correlate with its trace?
+ 
 ```{r}
-ggplot(iso_tbl, aes(x = X_var, y = X_trace)) + 
+ggplot(iso_tbl, aes(x = Y_var, y = Y_trace)) + 
   geom_point() + 
   geom_abline(intercept = 0, slope = 1, color = "red") + 
   geom_smooth(method = "lm")
 
 
-ggplot(iso_tbl, aes(x = S_var, y = S_trace)) + 
+ggplot(iso_tbl, aes(x = X_var, y = X_trace)) + 
   geom_point() + 
   geom_abline(intercept = 0, slope = 1, color = "red") + 
   geom_smooth(method = "lm")
