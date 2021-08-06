@@ -105,7 +105,7 @@ Define the properties of the consumers
 # number of isotopes - USER DEFINE and is a key variable we alter for the 
 # figures presented in the paper. Specically we present results from 
 # n_iso = c(1, 2, 10)
-n_iso <- 1
+n_iso_scalar <- 1
 
 # how many populations to simulate - USER DEFINE
 n_pops <- 1000
@@ -124,7 +124,7 @@ K <- ceiling(runif(n_pops, min = 3, max = 20 ))
 # set how many isotopes are used in each population and create the tibble
 # that stores the corresponding values of each simulation
 # Determined by values defined above.
-iso_tbl <- tibble(n_individuals, K, n_iso = rep(n_iso, n_pops) )
+iso_tbl <- tibble(n_individuals, K, n_iso = rep(n_iso_scalar, n_pops) )
 
 ```
 
@@ -188,8 +188,9 @@ genSourceRange <- function(n_iso, max_val = 30){
 ## start -- code not run -- retained should S_max be varied across simulations. 
 # generate maximum source isotope va?lues from which to draw Sources in the  
 # subsequent step.
-# iso_tbl %<>% mutate(S_max = pmap(list(n_iso), 
-#                                  genSourceRange, 
+# aj <- iso_tbl
+# aj %<>% mutate(S_max = pmap(list(n_iso),
+#                                  genSourceRange,
 #                                  max_val = source_iso_max))
 # in this formulation S_max is a constant and defined above.
 ## end -- code not run --
@@ -198,7 +199,10 @@ genSourceRange <- function(n_iso, max_val = 30){
 # simulations is a constant. The code immediately above allows this to vary 
 # randomly across simluations but there is no real value in pushing this 
 # extra source of variation through the code.
-iso_tbl %<>% mutate(S_max = source_iso_max)
+iso_tbl %<>% mutate(S_max = pmap(list(n_iso),
+                                 rep,
+                                 x = source_iso_max,
+                                 times = n_iso))
 
 # a function to generate the sources by drawing them from runif()
 generateSources <- function(K = 3, S_max = c(1, 10), setSeed = NULL, ...){
@@ -380,19 +384,20 @@ iso_tbl %<>%
 ```{r}
 
 # generate the string for the figure title
-my_title <- ifelse(n_iso == 1, 
-                   paste0(n_iso, " isotope"),
-                   paste0(n_iso, " isotopes"))
+my_title <- ifelse(n_iso_scalar == 1, 
+                   paste0(n_iso_scalar, " isotope"),
+                   paste0(n_iso_scalar, " isotopes"))
 
 # uncorrected X_var
 g1 <- ggplot(data = iso_tbl, 
              mapping = aes(x = p_trace,
                            y = Y_var)) + 
-  geom_point(alpha = 0.5) + 
-  geom_smooth(method = "lm") + 
+  geom_point(alpha = 0.5, size = 0.75) + 
+  geom_smooth(method = "lm", color = "black") + 
   ggtitle(my_title) + 
   xlab(expression(Tr(italic(C[f])))) + 
-  ylab(expression(var(italic(y))))
+  ylab(expression(var(italic(y)))) + 
+  theme_classic()
 
 # (K / (K-1))
 
@@ -400,16 +405,17 @@ g1 <- ggplot(data = iso_tbl,
 g1_corrected <- ggplot(data = iso_tbl, 
              mapping = aes(x = ((K) / (K-1)) * p_trace,
                            y = Y_var / X_var)) + 
-  geom_point() + 
-  geom_smooth(method = "lm") +
-  geom_abline(intercept = 0, slope = 1, color = "red") + 
+  geom_point(alpha = 0.5, size = 0.75) + 
+  geom_smooth(method = "lm", color = "black") +
+  geom_abline(intercept = 0, slope = 1, color = "black", linetype = 2) + 
   scale_color_viridis_c() + 
   ggtitle(my_title) + 
   coord_equal() + 
   xlim(0, 0.2) + 
   ylim(0, 0.2) + 
   xlab(expression(italic(frac(n, n-1))* Tr(italic(C[f])))) + 
-  ylab(expression(var(italic(y)) / var(italic(x))))
+  ylab(expression(var(italic(y)) / var(italic(x)))) + 
+  theme_classic()
   
   
 g1_test <- g1_corrected + aes(x = p_trace)
@@ -418,11 +424,36 @@ g1_test <- g1_corrected + aes(x = p_trace)
 (g1 | g1_corrected)
 
 ggsave(plot = (g1),
-       paste0("../export/", "n_iso_", n_iso, "_naive_correlation.pdf"), 
+       paste0("../export/", "n_iso_", n_iso_scalar, "_naive_correlation.pdf"), 
        width = 7, height = 7)
 ggsave(plot = (g1_corrected), 
-       filename = paste0("../export/", "n_iso_", n_iso, "_corrected_correlation.pdf"), 
+       filename = paste0("../export/", "n_iso_", n_iso_scalar, "_corrected_correlation.pdf"), 
        width = 7, height = 7)
+
+ with(iso_tbl, cor.test(((K) / (K-1)) * p_trace, Y_var ))
+```
+
+## For the case of 2 tracers, calculate the Standard Ellipse area
+
+```{r}
+
+if (n_iso_scalar == 2) {
+  g_sea <- ggplot(data = iso_tbl, 
+             mapping = aes(x = ((K) / (K-1)) * SEA,
+                           y = Y_var / X_var)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") +
+  geom_abline(intercept = 0, slope = 1, color = "red") + 
+  scale_color_viridis_c() + 
+  ggtitle(my_title)
+  # coord_equal() 
+  
+  print(g_sea)
+}
+
+
+
+
 ```
 
 
@@ -430,18 +461,19 @@ ggsave(plot = (g1_corrected),
 
 g2 <- ggplot(iso_tbl, aes(x = K * p_aniso,
                           y = (Y_var / X_var) - (K / (K-1)) * p_trace )) + 
-  geom_point(alpha = 0.5)
+  geom_point(alpha = 0.5, size = 0.75) + 
+  theme_classic()
 
 # absolute deviations
 g2_abs <- g2 + aes(y = abs((Y_var / X_var) - (K / (K-1)) * p_trace )) + 
-  geom_smooth(method = "lm") + 
+  geom_smooth(method = "lm", color = "black") + 
   ylab("Absolute Deviance") + 
   xlab(expression(n (aniso_equation)))
 
 (g2_abs)
 
 ggsave(g2_abs, 
-       filename = paste0("../export/", "n_iso_", n_iso, "_anisotropy.pdf"), 
+       filename = paste0("../export/", "n_iso_", n_iso_scalar, "_anisotropy.pdf"), 
        width = 10, height = 4.51)
 
 ```
