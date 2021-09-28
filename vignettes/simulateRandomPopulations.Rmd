@@ -108,7 +108,7 @@ Define the properties of the consumers
 
 # number of isotopes - USER DEFINE and is a key variable we alter for the 
 # figures presented in the paper. Specically we present results from 
-# n_iso = c(1, 2, 10)
+# n_iso = c(1, 2, 10) 
 n_iso_scalar <- 10
 
 # how many populations to simulate - USER DEFINE
