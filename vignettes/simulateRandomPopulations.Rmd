@@ -19,7 +19,7 @@ library(magrittr)
 library(broom)
 library(patchwork)
 library(knitr)
-# library(latex2exp) # for latex style equations in figures
+library(latex2exp) # for latex style equations in figures
 
 # pretty summary table printing these need to be installed, but not loaded
 # install.packages("sjplot) # is sufficient to pull the others
@@ -32,6 +32,10 @@ library(knitr)
 
 # source the R files while this is not a compiled package
 # source("../R/simPopEquilibrium.R")
+
+# Set the seed to reproduce the exact results presented in the paper
+# set as of 28-Sep-2021 by Andrew Jackson
+set.seed(28092021, kind = "Mersenne-Twister")
 
 ```
 
@@ -105,7 +109,7 @@ Define the properties of the consumers
 # number of isotopes - USER DEFINE and is a key variable we alter for the 
 # figures presented in the paper. Specically we present results from 
 # n_iso = c(1, 2, 10)
-n_iso_scalar <- 1
+n_iso_scalar <- 10
 
 # how many populations to simulate - USER DEFINE
 n_pops <- 1000
@@ -468,13 +472,14 @@ g2 <- ggplot(iso_tbl, aes(x = K * p_aniso,
 g2_abs <- g2 + aes(y = abs((Y_var / X_var) - (K / (K-1)) * p_trace )) + 
   geom_smooth(method = "lm", color = "black") + 
   ylab("Absolute Deviance") + 
-  xlab(expression(n (aniso_equation)))
+  xlab(TeX(r'($n(\max_{\alpha} sigma_{\alpha}^2 - \min_{\alpha}\sigma_{\alpha}^2)$)'))
+  # xlab(expression(n(max[alpha] * sigma[alpha]^2 - min[alpha] * sigma[alpha]^2)) * min(sigma[alpha], alpha))
 
 (g2_abs)
 
 ggsave(g2_abs, 
        filename = paste0("../export/", "n_iso_", n_iso_scalar, "_anisotropy.pdf"), 
-       width = 10, height = 4.51)
+       width = 5, height = 5)
 
 ```
 
