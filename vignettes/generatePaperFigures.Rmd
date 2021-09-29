@@ -108,8 +108,8 @@ Define the properties of the consumers
 
 # number of isotopes - USER DEFINE and is a key variable we alter for the 
 # figures presented in the paper. Specically we present results from 
-# n_iso = c(1, 2, 10)
-n_iso_scalar <- 1
+# n_iso = c(1, 2, 10) 
+n_iso_scalar <- c(1, 2, 10)
 
 # how many populations to simulate - USER DEFINE
 n_pops <- 1000
@@ -123,7 +123,7 @@ source_iso_max <- 10
 
 # number of food sources they eat from - USER can define the min and max 
 # number of food sources
-K <- ceiling(runif(n_pops, min = 3, max = 20 ))
+K <- ceiling(runif(n_pops * length(n_iso_scalar), min = 3, max = 20 ))
 
 # set how many isotopes are used in each population and create the tibble
 # that stores the corresponding values of each simulation
@@ -301,7 +301,7 @@ dirichletMomentsAlphas <- function(aa) {
 }
   
 
-# Debuggin - test the function
+# Debugging - test the function
 # dirichletMomentsAlphas(rep(3, 5))
                         
 ```
@@ -387,33 +387,36 @@ iso_tbl %<>%
 
 ```{r}
 
-# generate the string for the figure title
-my_title <- ifelse(n_iso_scalar == 1, 
-                   paste0(n_iso_scalar, " isotope"),
-                   paste0(n_iso_scalar, " isotopes"))
+squarePlot <- function(plt){
+    return(plt+coord_equal()+
+            expand_limits(x=ggplot_build(plt)$panel$ranges[[1]]$y.range,
+                          y=ggplot_build(plt)$panel$ranges[[1]]$x.range))
+}
 
 # uncorrected X_var
-g1 <- ggplot(data = iso_tbl, 
+g1a <- ggplot(data = iso_tbl %>% filter(n_iso == 1), 
              mapping = aes(x = p_trace,
                            y = Y_var)) + 
   geom_point(alpha = 0.5, size = 0.75) + 
   geom_smooth(method = "lm", color = "black") + 
-  ggtitle(my_title) + 
+  ggtitle("1 isotope") + 
   xlab(expression(Tr(italic(C[f])))) + 
   ylab(expression(var(italic(y)))) + 
   theme_classic()
 
-# (K / (K-1))
+# r<-max(abs(layer_scales(g1a)$x$range$range))
+# s<-max(abs(layer_scales(g1a)$y$range$range))
+# t<-round(max(r,s),1)
+# g1a <- g1a+coord_equal(xlim=c(0,t),ylim=c(0,t))
 
-# corrected X_var
-g1_corrected <- ggplot(data = iso_tbl, 
+g1b <- ggplot(data = iso_tbl %>% filter(n_iso == 1), 
              mapping = aes(x = ((K) / (K-1)) * p_trace,
                            y = Y_var / X_var)) + 
   geom_point(alpha = 0.5, size = 0.75) + 
   geom_smooth(method = "lm", color = "black") +
   geom_abline(intercept = 0, slope = 1, color = "black", linetype = 2) + 
   scale_color_viridis_c() + 
-  ggtitle(my_title) + 
+  ggtitle("1 isotope") + 
   coord_equal() + 
   xlim(0, 0.2) + 
   ylim(0, 0.2) + 
@@ -421,25 +424,49 @@ g1_corrected <- ggplot(data = iso_tbl,
   ylab(expression(var(italic(y)) / var(italic(x)))) + 
   theme_classic()
   
-  
-g1_test <- g1_corrected + aes(x = p_trace)
+# plot the corrected data for 2 isotopes and then 10 isotopes
+g1c <- g1b %+% (iso_tbl %>% filter(n_iso == 2))  + ggtitle("2 isotopes")
+g1d <- g1b %+% (iso_tbl %>% filter(n_iso == 10)) + ggtitle("10 isotopes")
 
+# print to screen in a one over three format as i cant square the axis of 
+# panel 1.
+(g1a  / (g1b | g1c | g1d))
 
-(g1 | g1_corrected)
-
-ggsave(plot = (g1),
-       paste0("../export/", "n_iso_", n_iso_scalar, "_naive_correlation.pdf"), 
+ggsave(plot = (g1a),
+       paste0("../export/g1a.pdf"),
        width = 7, height = 7)
-ggsave(plot = (g1_corrected), 
-       filename = paste0("../export/", "n_iso_", n_iso_scalar, "_corrected_correlation.pdf"), 
+
+ggsave(plot = (g1b),
+       paste0("../export/g1b.pdf"),
        width = 7, height = 7)
 
- with(iso_tbl, cor.test(((K) / (K-1)) * p_trace, Y_var ))
+ggsave(plot = (g1c),
+       paste0("../export/g1c.pdf"),
+       width = 7, height = 7)
+
+ggsave(plot = (g1d),
+       paste0("../export/g1d.pdf"),
+       width = 7, height = 7)
+
+
+ # with(iso_tbl, cor.test(((K) / (K-1)) * p_trace, Y_var ))
 ```
+
+The correlations between panels a, b, c, d
+
+```{r}
+
+iso_tbl %>% group_by(n_iso) %>% 
+  summarise(rho_uncorrected = cor(Y_var, p_trace),
+            rho_corrected   = cor(Y_var / X_var, ((K) / (K-1)) * p_trace)) %>% 
+  round(2)
+
+```
+
 
 ## For the case of 2 tracers, calculate the Standard Ellipse area
 
-```{r}
+```{r, eval=FALSE}
 
 if (n_iso_scalar == 2) {
   g_sea <- ggplot(data = iso_tbl, 
@@ -463,7 +490,8 @@ if (n_iso_scalar == 2) {
 
 ```{r}
 
-g2 <- ggplot(iso_tbl, aes(x = K * p_aniso,
+g2 <- ggplot(iso_tbl %>% filter(n_iso == 1), 
+             aes(x = K * p_aniso,
                           y = (Y_var / X_var) - (K / (K-1)) * p_trace )) + 
   geom_point(alpha = 0.5, size = 0.75) + 
   theme_classic()
@@ -478,49 +506,12 @@ g2_abs <- g2 + aes(y = abs((Y_var / X_var) - (K / (K-1)) * p_trace )) +
 (g2_abs)
 
 ggsave(g2_abs, 
-       filename = paste0("../export/", "n_iso_", n_iso_scalar, "_anisotropy.pdf"), 
+       filename = paste0("../export/fig2_n_iso_1_anisotropy.pdf"), 
        width = 5, height = 5)
 
 ```
 
 
-### Fit a linear model for all the variables
-
-The prediction from a log-log regression model would be that the coefficients are all equal to 1. This is because on a log-log scale, the multiplicative relationships become additive. That is, if 
-
-$$y = abc$$
-
-then
-
-$$\log(y) = \log(a) + \log(b) + \log(c)$$
-
-**_I'm quite surprised with these results. Given that the glm() model is fitting type 3 sums of squares (fully partial residuals) I would have expected all of the slopes to very close to 1 given the figures above._**
-
-```{r}
-
-m5 <- glm(log(Y_var) ~ log(I(K/(K-1))) + log(X_var) + log(p_trace), data = iso_tbl)
-
-m5 %>% tidy() %>% kable(digits = 2)
-```
-
-
-## Testing
-
-How do the sum of the covariance matrices (for $Y$ and $X$) correlate with its trace?
- 
-```{r}
-ggplot(iso_tbl, aes(x = Y_var, y = Y_trace)) + 
-  geom_point() + 
-  geom_abline(intercept = 0, slope = 1, color = "red") + 
-  geom_smooth(method = "lm")
-
-
-ggplot(iso_tbl, aes(x = X_var, y = X_trace)) + 
-  geom_point() + 
-  geom_abline(intercept = 0, slope = 1, color = "red") + 
-  geom_smooth(method = "lm")
-
-```
 
 
 
