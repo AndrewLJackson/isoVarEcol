@@ -402,7 +402,8 @@ g1a <- ggplot(data = iso_tbl %>% filter(n_iso == 1),
   ggtitle("1 isotope") + 
   xlab(expression(Tr(italic(C[f])))) + 
   ylab(expression(var(italic(y)))) + 
-  theme_classic()
+  theme_classic() + 
+  coord_fixed(ratio = 0.125/2, xlim = c(0, 0.125), ylim = c(0,2))
 
 # r<-max(abs(layer_scales(g1a)$x$range$range))
 # s<-max(abs(layer_scales(g1a)$y$range$range))
@@ -430,7 +431,9 @@ g1d <- g1b %+% (iso_tbl %>% filter(n_iso == 10)) + ggtitle("10 isotopes")
 
 # print to screen in a one over three format as i cant square the axis of 
 # panel 1.
-(g1a  / (g1b | g1c | g1d))
+# (g1a  / (g1b | g1c | g1d))
+
+g1a + g1b + g1c + g1d + plot_layout(ncol = 2, nrow = 2, widths = c(1,1))
 
 ggsave(plot = (g1a),
        paste0("../export/g1a.pdf"),
