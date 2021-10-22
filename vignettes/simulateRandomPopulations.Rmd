@@ -443,8 +443,8 @@ ggsave(plot = (g1_corrected),
 
 if (n_iso_scalar == 2) {
   g_sea <- ggplot(data = iso_tbl, 
-             mapping = aes(x = ((K) / (K-1)) * SEA,
-                           y = Y_var / X_var)) + 
+             mapping = aes(x = ((K) / (K-1)) * p_trace,
+                           y = SEA / X_var)) + 
   geom_point() + 
   geom_smooth(method = "lm") +
   geom_abline(intercept = 0, slope = 1, color = "red") + 
