@@ -503,7 +503,7 @@ g2 <- ggplot(iso_tbl %>% filter(n_iso == 1),
 g2_abs <- g2 + aes(y = abs((Y_var / X_var) - (K / (K-1)) * p_trace )) + 
   geom_smooth(method = "lm", color = "black") + 
   ylab("Absolute Deviance") + 
-  xlab(TeX(r'($n(\max_{\alpha} sigma_{\alpha}^2 - \min_{\alpha}\sigma_{\alpha}^2)$)'))
+  xlab(TeX(r'($n(\max_{\alpha} \sigma_{\alpha}^2 - \min_{\alpha}\sigma_{\alpha}^2)$)'))
   # xlab(expression(n(max[alpha] * sigma[alpha]^2 - min[alpha] * sigma[alpha]^2)) * min(sigma[alpha], alpha))
 
 (g2_abs)
