@@ -436,19 +436,19 @@ g1d <- g1b %+% (iso_tbl %>% filter(n_iso == 10)) + ggtitle("10 isotopes")
 g1a + g1b + g1c + g1d + plot_layout(ncol = 2, nrow = 2, widths = c(1,1))
 
 ggsave(plot = (g1a),
-       paste0("../export/g1a.pdf"),
+       paste0("../export/g1a.png"),
        width = 7, height = 7)
 
 ggsave(plot = (g1b),
-       paste0("../export/g1b.pdf"),
+       paste0("../export/g1b.png"),
        width = 7, height = 7)
 
 ggsave(plot = (g1c),
-       paste0("../export/g1c.pdf"),
+       paste0("../export/g1c.png"),
        width = 7, height = 7)
 
 ggsave(plot = (g1d),
-       paste0("../export/g1d.pdf"),
+       paste0("../export/g1d.png"),
        width = 7, height = 7)
 
 
@@ -510,7 +510,7 @@ g2_abs <- g2 + aes(y = abs((Y_var / X_var) - (K / (K-1)) * p_trace )) +
 (g2_abs)
 
 ggsave(g2_abs, 
-       filename = paste0("../export/fig2_n_iso_1_anisotropy.pdf"), 
+       filename = paste0("../export/fig2_n_iso_1_anisotropy.png"), 
        width = 5, height = 5)
 
 ```
