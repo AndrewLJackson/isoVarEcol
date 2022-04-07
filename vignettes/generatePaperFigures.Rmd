@@ -506,6 +506,7 @@ g2_abs <- g2 + aes(y = abs((Y_var / X_var) - (K / (K-1)) * p_trace )) +
   xlab(TeX(r'($n(\max_{\alpha} \sigma_{\alpha}^2 - \min_{\alpha}\sigma_{\alpha}^2)$)'))
   # xlab(expression(n(max[alpha] * sigma[alpha]^2 - min[alpha] * sigma[alpha]^2)) * min(sigma[alpha], alpha))
 
+# (g2_abs + scale_x_log10() + scale_y_log10())
 (g2_abs)
 
 ggsave(g2_abs, 

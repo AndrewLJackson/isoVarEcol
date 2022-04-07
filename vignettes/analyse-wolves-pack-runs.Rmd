@@ -1,0 +1,242 @@
+---
+title: "Analyse wolves data models fitted to packs"
+output: html_notebook
+---
+
+```{r setup}
+
+library(tidyverse)
+library(magrittr)
+
+# A basic population variance function
+# NB this contrasts with R's default cov() which uses sample variance.
+popVar <- function(x){sum((x - mean(x)) ^2) / length(x)}
+
+popCov <- function(x, y=NULL) {
+   cov(x,y)*(nrow(x)-1)/nrow(x)
+}
+
+```
+
+
+## Load the previous runs
+
+```{r}
+
+# load the source data by region
+raw_source_data <- read.csv(file = "wolves/wolves_sources.csv", header = TRUE)
+
+# load the full raw data
+raw_wolves_consumer_all_data <- read.csv(file = "wolves/wolves_consumer.csv", header = TRUE)
+
+load(file = "wolves-normal-process-only-region-1.RData")
+
+load(file = "wolves-normal-process-only-region-2.RData")
+
+load(file = "wolves-normal-process-only-region-3.RData")
+```
+
+
+### Analyze diagnostics and output
+
+Set the options for the output which is common to all subsequent calls `output_stats()`.
+
+```{r, eval=TRUE}
+output_options <- list(summary_save = FALSE,
+                       summary_name = "summary_statistics",
+                       sup_post = FALSE,
+                       plot_post_save_pdf = TRUE,
+                       plot_post_name = "posterior_density",
+                       sup_pairs = FALSE,
+                       plot_pairs_save_pdf = TRUE,
+                       plot_pairs_name = "pairs_plot",
+                       sup_xy = TRUE,
+                       plot_xy_save_pdf = FALSE,
+                       plot_xy_name = "xy_plot",
+                       gelman = TRUE,
+                       heidel = FALSE,
+                       geweke = TRUE,
+                       diag_save = TRUE,
+                       diag_name = "diagnostics",
+                       indiv_effect = FALSE,
+                       plot_post_save_png = FALSE,
+                       plot_pairs_save_png = FALSE,
+                       plot_xy_save_png = FALSE,
+                       diag_save_ggmcmc = FALSE, 
+                       return_obj = TRUE)
+```
+
+Then you can call `output_JAGS` to process diagnostics, summary statistics, and create posterior density plots:
+```{r, eval=TRUE}
+df.stats_region_1 <- output_stats(jags_region_1, 
+                                  mix_1, 
+                                  source_1, 
+                                  output_options)
+
+df.stats_region_2 <- output_stats(jags_region_2, 
+                                  mix_2, 
+                                  source_2, 
+                                  output_options)
+
+df.stats_region_3 <- output_stats(jags_region_3, 
+                                  mix_3, 
+                                  source_3, 
+                                  output_options)
+
+
+
+```
+
+## try to calculate the summed variances of the proportions by pack
+
+```{r}
+
+wolves_summary <- bind_rows(
+  as.data.frame(df.stats_region_1),
+  as.data.frame(df.stats_region_2),
+  as.data.frame(df.stats_region_3))
+
+wolves_summary <- as_tibble(wolves_summary,
+                            rownames = "post")
+
+wolves_packs <- filter(wolves_summary, 
+                       grepl('p.Individual', post))
+
+indiv_labels <- str_extract_all(wolves_packs$post, 
+                    "\\d", 
+                    simplify = T)
+
+# combine the numeric strings by row and coerce to numberic
+wolves_packs %<>% mutate(Individual = 
+                           as.numeric(
+                             apply(indiv_labels, 
+                                   1, 
+                                   paste0, 
+                                   collapse = ""))) 
+
+```
+
+Merge with the pack data so we can group it an calculate pack-level variance
+
+```{r}
+
+wolves_packs <- left_join(wolves_packs,
+                          select(raw_wolves_consumer_all_data,
+                                 Individual, 
+                                 Pack))
+
+```
+
+And now calculate variance in the diet proportions
+
+```{r}
+
+# reshape the mean proportions into a nx3 matrix of 
+# individuals across the 3 sources and calculate the 
+# covariance matrix and return its trace.
+
+pack_var_p <- wolves_packs %>% 
+  group_by(Pack) %>% 
+  summarise(var_p = sum(diag(cov(matrix(Mean, ncol = 3)))))
+
+```
+
+Calculate pack level variance from the raw isotope data
+
+```{r}
+
+pack_var_y <- raw_wolves_consumer_all_data %>% 
+  group_by(Pack) %>%
+  summarise(var_y = sum(diag(popCov(cbind(d13C, d15N)))))
+
+```
+
+Join the proportion variance and raw isotope variance estimates
+
+```{r}
+
+# join the dataframes containing the variance in 
+# proportions with the one containing variance in 
+# raw consumer isotope data. 
+pack_var <- inner_join(pack_var_p, pack_var_y, 
+                       by = "Pack")
+
+# extract the pack-to-region key to allow a lookup
+pack_region_key <- raw_wolves_consumer_all_data %>%
+  group_by(Pack) %>%
+  summarise(Pack = Pack[1], Region = Region[1])
+
+# add the region data to the consumer variance dataset
+pack_var <- left_join(pack_var, 
+                       pack_region_key, 
+                       by = "Pack")
+```
+
+Calculate the source isotope variance
+
+```{r}
+
+var_S <- raw_source_data %>% group_by(Region) %>% 
+  summarise(var_S = popVar(Meand13C) + sum(SDd13C^2) +
+              popVar(Meand15N) + sum(SDd15N^2))
+
+# Add source variance to the consumer variance dataset
+pack_var <- left_join(pack_var, var_S, 
+                       by = "Region")
+
+```
+
+
+And plot it
+
+```{r}
+
+g1 <- ggplot(data = pack_var,
+             mapping = aes(x = var_p, 
+                           y = var_y)) + 
+  geom_point() + 
+  geom_smooth(method = "lm")
+
+print(g1)
+
+```
+
+Correct by source variation
+
+```{r}
+
+g2 <- ggplot(data = pack_var,
+             mapping = aes(x = (3/2) * var_p,
+                           y = var_y / var_S)
+             ) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  geom_abline(slope = 1, intercept = 0)
+
+print(g2)
+
+
+
+```
+
+
+
+
+
+```{r previous-code, eval = F}
+
+pack_summaries <- wolves_packs %>% group_by(pack) %>% 
+  summarise(sum(diag(cov(matrix(Mean, ncol = 34)))))
+
+pack_iso_var <- mix$data %>% group_by(Pack, ) %>% 
+  summarise(iso_var = popVar(d13C) + popVar(d15N), 
+            region = Region[1])
+
+# get the baseline variation by region
+source_variation_region_1 <- source_1$S_MU %>% as_tibble %>%
+  summarise(source_var = popVar(Meand13C) + popVar(Meand15N))
+
+
+```
+
+
