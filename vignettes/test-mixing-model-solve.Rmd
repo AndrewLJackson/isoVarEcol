@@ -1,0 +1,69 @@
+---
+title: "test linear algebra solve"
+output: html_notebook
+---
+
+
+```{r}
+
+p <- cbind(c(0.1, 0.3, 0.6),
+           c(0.8, 0.1, 0.1), 
+           c(0.3, 0.3, 0.4))
+
+S <- rbind(c(-27, -12, -22), 
+           c(2,  16,  11))
+
+Y <- S %*% p
+
+# reduce the dimensionality of the matrix to be square
+# because of the sum-to-one property
+Sr <- apply(S[,1:2], 2, function(x){x-S[,3]})
+Yr <- Y -S[,3]
+
+# solve for the proportions
+pr <- solve(Sr, Yr)
+pr <- rbind(pr, 1 - colSums(pr))
+```
+
+```{r}
+# a function to solve a mixing model for the set of proportions
+# given M the rectangular matrix of Sources and 
+# Y the mixtures
+solveMix <- function(M,Y){
+  
+  # reduce the dimensionality of the matrix and 
+  # adjust the mixture accordingly
+  Mr <- apply(M[,1:2], 2, function(x){x-M[,3]})
+  Yr <- Y - M[,3]
+  
+  # solve for the proportions
+  pr <- solve(Sr, Yr)
+  
+  # add back in the missing proportion
+  p <- rbind(pr, 1 - colSums(pr))
+  
+  # return output
+  return(p)
+
+}
+
+```
+
+test our function
+
+```{r}
+
+p <- cbind(c(0.1, 0.3, 0.6),
+           c(0.8, 0.1, 0.1), 
+           c(0.3, 0.3, 0.4))
+
+S <- rbind(c(-27, -12, -22), 
+           c(2,  16,  11))
+
+Y <- S %*% p
+
+solveMix(S, Y)
+```
+
+
+

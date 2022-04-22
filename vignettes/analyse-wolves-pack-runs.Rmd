@@ -1,5 +1,5 @@
 ---
-title: "Analyse wolves data models fitted to packs"
+title: "Estimate wolves diets using linear algebra"
 output: html_notebook
 ---
 
@@ -24,16 +24,45 @@ popCov <- function(x, y=NULL) {
 ```{r}
 
 # load the source data by region
-raw_source_data <- read.csv(file = "wolves/wolves_sources.csv", header = TRUE)
+raw_source_data <- 
+  read.csv(file = "wolves/wolves_sources.csv", 
+           header = TRUE) %>%
+  arrange(Region, X) %>% select(X, Region, Meand13C, Meand15N)
+
+
+# Replace the system.file call with the path to your file
+raw_tdf <- 
+  read.csv("wolves/wolves_discrimination.csv", 
+           head = TRUE) %>% 
+  arrange(X) %>% 
+  select(X, Meand13C, Meand15N)
 
 # load the full raw data
-raw_wolves_consumer_all_data <- read.csv(file = "wolves/wolves_consumer.csv", header = TRUE)
+raw_wolves_consumer_all_data <- 
+  read.csv(file = "wolves/wolves_consumer.csv", 
+           header = TRUE) %>% 
+  arrange(Region, Pack) %>% select(d13C, d15N, Region, Pack)
+```
 
-load(file = "wolves-normal-process-only-region-1.RData")
 
-load(file = "wolves-normal-process-only-region-2.RData")
+## Calculate diet for each wolf
 
-load(file = "wolves-normal-process-only-region-3.RData")
+```{r}
+
+for (i in 1:3){
+  
+  S <- raw_source_data %>% 
+    filter(Region == i) %>% 
+    select(Meand13C, Meand15N)
+  
+  y <- raw_wolves_consumer_all_data %>% 
+    filter(Region == i) %>% 
+    select(d13C, d15N)
+
+}
+
+
+
 ```
 
 

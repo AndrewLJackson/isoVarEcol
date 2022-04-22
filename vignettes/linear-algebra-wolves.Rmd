@@ -1,0 +1,175 @@
+---
+title: "Estimate wolves diets using linear algebra"
+output: html_notebook
+---
+
+```{r setup}
+
+library(tidyverse)
+library(magrittr)
+library(patchwork)
+
+# A basic population variance function
+# NB this contrasts with R's default cov() which uses sample variance.
+popVar <- function(x){sum((x - mean(x)) ^2) / length(x)}
+
+popCov <- function(x, y=NULL) {
+   cov(x,y)*(nrow(x)-1)/nrow(x)
+}
+
+```
+
+
+## Load the previous runs
+
+```{r}
+
+# load the source data by region
+raw_source_data <- 
+  read.csv(file = "wolves/wolves_sources.csv", 
+           header = TRUE) %>%
+  arrange(Region, X) %>% 
+  select(X, Region, Meand13C, Meand15N, SDd13C, SDd15N)
+
+
+# Replace the system.file call with the path to your file
+raw_tdf <- 
+  read.csv("wolves/wolves_discrimination.csv", 
+           head = TRUE) %>% 
+  arrange(X) %>% 
+  select(X, Meand13C, Meand15N)
+
+# correct the source values by the TDF
+cor_source_data <- raw_source_data %>% 
+  group_by(Region) %>% 
+  mutate(d13C = Meand13C + raw_tdf$Meand13C , 
+         d15N = Meand15N + raw_tdf$Meand15N )  %>%
+  ungroup()
+
+# load the full raw data
+raw_wolves_consumer_all_data <- 
+  read.csv(file = "wolves/wolves_consumer.csv", 
+           header = TRUE) %>% 
+  arrange(Region, Pack) %>% select(d13C, d15N, Region, Pack)
+```
+
+# Plot the isotope data
+
+```{r, fig.width = 12, fig.height=4}
+
+g1 <- ggplot(data = cor_source_data, 
+             mapping = aes(d13C, d15N))  + 
+  geom_polygon(alpha = 0.1) + 
+  geom_point(mapping = aes(color = X), shape = "square", size = 5) + 
+  geom_point(data = raw_wolves_consumer_all_data, 
+             mapping = aes(color = factor(Pack))) + 
+  facet_wrap(vars(Region))
+
+print(g1)
+
+```
+
+
+
+## Calculate diet for each wolf
+
+Define a function to solves the set of equations
+
+```{r}
+# a function to solve a mixing model for the set of proportions
+# given M the rectangular matrix of Sources and 
+# Y the mixtures
+solveMix <- function(M,Y){
+  
+  # reduce the dimensionality of the matrix and 
+  # adjust the mixture accordingly
+  Mr <- apply(M[,1:2], 2, function(x){x-M[,3]})
+  Yr <- Y - M[,3]
+  
+  # solve for the proportions
+  pr <- solve(Sr, Yr)
+  
+  # add back in the missing proportion
+  p <- rbind(pr, 1 - colSums(pr))
+  
+  # return output
+  return(t(p))
+
+}
+
+```
+
+## Calculate diet proportions for each wolf within a region
+
+```{r}
+
+p <- list()
+
+for (i in 1:3){
+  
+  S <- cor_source_data %>% 
+    filter(Region == i) %>% 
+    select(d13C, d15N) %>%
+    as.matrix() %>%
+    t()
+  
+  
+  y <- raw_wolves_consumer_all_data %>% 
+    filter(Region == i) %>% 
+    select(d13C, d15N) %>%
+    as.matrix() %>%
+    t()
+  
+  p[[i]] <- as.tibble(solveMix(S, y))
+  
+}
+
+# assemble the proportion data and link to region and pack
+names(p) <- 1:length(p)
+
+all_p <- bind_rows(p)
+
+names(all_p) <- c("Deer", "Marine", "Salmon")
+
+diet_estimates <- bind_cols(raw_wolves_consumer_all_data, all_p)
+
+```
+
+Calculate variance at the level of pack
+
+```{r}
+
+pack_var <- diet_estimates %>%
+  group_by(Pack) %>%
+  summarise(var_p = sum(diag(popCov(cbind(Deer, Marine, Salmon)))),
+            var_y = sum(diag(popCov(cbind(d13C, d15N)))),
+            Region = Region[1])
+
+var_S <- raw_source_data %>% group_by(Region) %>% 
+  summarise(var_S = popVar(Meand13C) + sum(SDd13C^2) +
+              popVar(Meand15N) + sum(SDd15N^2))
+
+# Add source variance to the consumer variance dataset
+pack_var <- left_join(pack_var, var_S, 
+                       by = "Region")
+
+```
+
+## Plot variances against each other
+
+```{r}
+g2 <- ggplot(data = pack_var, 
+             mapping = aes(x = var_p, y = var_y)) + 
+  geom_point() 
+
+
+g3 <- ggplot(data = pack_var, 
+             mapping = aes(x = var_p, y = var_y / var_S)) + 
+  geom_point() + 
+  geom_abline(intercept = 0, slope = 1)
+
+print(g2 | g3)
+
+```
+
+
