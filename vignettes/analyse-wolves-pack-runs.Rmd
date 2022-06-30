@@ -95,7 +95,7 @@ output_options <- list(summary_save = FALSE,
                        return_obj = TRUE)
 ```
 
-Then you can call `output_JAGS` to process diagnostics, summary statistics, and create posterior density plots:
+Then you can call `output_stats` to process diagnostics, summary statistics, and create posterior density plots:
 ```{r, eval=TRUE}
 df.stats_region_1 <- output_stats(jags_region_1, 
                                   mix_1, 
